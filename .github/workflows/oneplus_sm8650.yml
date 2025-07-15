@@ -11,19 +11,6 @@ on:
           - 'oneplus12'
           - 'oneplus_pad_pro'
         default: 'oneplus_ace5'
-        
-      custom_kernel_suffix:
-        description: "✏️ 自定义内核名称(示例:-TG@qdykernel) - 仅在取消勾选'保持原设置'时有效"
-        required: false
-        default: ''
-
-      
-      custom_kernel_time:
-        description: "⏰ 自定义构建时间(示例:Tue Dec 17 23:36:49 UTC 2024) - 仅在取消勾选'保持原设置'时有效"
-        required: false
-        default: ''
-
-      
       enable_feature_y:
         description: "启用lz4+zstd优化"
         required: false
@@ -34,6 +21,16 @@ on:
         description: "启用KPM"
         required: false
         default: false
+      KERNEL_NAME:
+        description: "自定义内核名称（如：-TG@qdykernel）"
+        required: false
+        type: string
+        default: '-android14-TG@qdykernel'
+      BUILD_DATE:
+        description: "自定义构建日期（如：12月17日，周二23:36:49 UTC 2024）"
+        required: false
+        type: string
+        default: ''
 
 jobs:
   build:
@@ -61,6 +58,9 @@ jobs:
               echo "DEVICES_NAME=${{ github.event.inputs.REPO_MANIFEST }}" >> $GITHUB_ENV
               ;;
           esac
+          # 设置自定义内核名称和构建日期
+          echo "KERNEL_NAME=${{ github.event.inputs.KERNEL_NAME }}" >> $GITHUB_ENV
+          echo "BUILD_DATE=${{ github.event.inputs.BUILD_DATE }}" >> $GITHUB_ENV
 
       - name: ⚙️ Set device-specific CCACHE_DIR (设置对应机型Cceche路径)
         run: |
@@ -145,9 +145,12 @@ jobs:
           sed -i '$i res=$(echo "$res" | sed '\''s/-dirty//g'\'')' kernel_platform/common/scripts/setlocalversion
           sed -i '$i res=$(echo "$res" | sed '\''s/-dirty//g'\'')' kernel_platform/msm-kernel/scripts/setlocalversion
           sed -i '$i res=$(echo "$res" | sed '\''s/-dirty//g'\'')' kernel_platform/external/dtc/scripts/setlocalversion
-          sed -i '$s|echo "\$res"|echo "-android14-TG@qdykernel"|' kernel_platform/common/scripts/setlocalversion            
-          sed -i '$s|echo "\$res"|echo "-android14-TG@qdykernel"|' kernel_platform/msm-kernel/scripts/setlocalversion
-          sed -i '$s|echo "\$res"|echo "-android14-TG@qdykernel"|' kernel_platform/external/dtc/scripts/setlocalversion
+          
+          # 使用自定义内核名称
+          sed -i '$s|echo "\$res"|echo "'"$KERNEL_NAME"'"|' kernel_platform/common/scripts/setlocalversion            
+          sed -i '$s|echo "\$res"|echo "'"$KERNEL_NAME"'"|' kernel_platform/msm-kernel/scripts/setlocalversion
+          sed -i '$s|echo "\$res"|echo "'"$KERNEL_NAME"'"|' kernel_platform/external/dtc/scripts/setlocalversion
+          
           # 清理abi保护
           rm kernel_platform/common/android/abi_gki_protected_exports_* || echo "No protected exports!"
           rm kernel_platform/msm-kernel/android/abi_gki_protected_exports_* || echo "No protected exports!"
@@ -238,6 +241,11 @@ jobs:
           export CCACHE_DIR="${{ env.CCACHE_DIR }}"
           export CCACHE_MAXSIZE="8G"
           
+          # 设置自定义构建日期
+          if [ -n "$BUILD_DATE" ]; then
+            export KBUILD_BUILD_TIMESTAMP="$BUILD_DATE"
+          fi
+          
           cd kernel_workspace/kernel_platform/common
           
           make -j$(nproc --all) LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC="ccache clang" RUSTC=../../prebuilts/rust/linux-x86/1.73.0b/bin/rustc PAHOLE=../../prebuilts/kernel-build-tools/linux-x86/bin/pahole LD=ld.lld HOSTLD=ld.lld O=out KCFLAGS+=-O2  gki_defconfig
@@ -245,6 +253,7 @@ jobs:
           make -j$(nproc --all) LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC="ccache clang" RUSTC=../../prebuilts/rust/linux-x86/1.73.0b/bin/rustc PAHOLE=../../prebuilts/kernel-build-tools/linux-x86/bin/pahole LD=ld.lld HOSTLD=ld.lld O=out KCFLAGS+=-O2  Image
 
       - name: 📦 Apply Linux Patch (应用KPM修补补丁)
+        if: ${{ github.event.inputs.enable_feature_x == 'true' }}
         run: |
           cd kernel_workspace/kernel_platform/common/out/arch/arm64/boot
           curl -LO https://github.com/SukiSU-Ultra/SukiSU_KernelPatch_patch/releases/download/0.12.0/patch_linux
