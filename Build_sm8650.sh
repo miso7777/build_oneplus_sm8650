@@ -50,6 +50,9 @@ esac
 read -p "输入内核名称修改(可改中文和emoji 回车默认): " input_suffix
 [ -n "$input_suffix" ] && KERNEL_SUFFIX="$input_suffix"
 
+read -p "输入内核构建日期更改(回车默认为原厂) : " input_time
+[ -n "$input_time" ] && KERNEL_TIME="$input_time
+
 read -p "是否启用kpm?(回车默认开启) [y/N]: " kpm
 [[ "$kpm" =~ [yY] ]] && ENABLE_KPM=true
 
